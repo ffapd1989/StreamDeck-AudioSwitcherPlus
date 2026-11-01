@@ -8,9 +8,10 @@
      shared/AudioDevicesIcons, recolored with a CSS mask the same way png-recolor.ts does (keep alpha, replace
      RGB). The settings panels are the real shared/propertyinspector/index.html, fed fake device data, so they
      stay true to the plugin when the PI changes. Device names are generic Windows ones, not real products.
-     slide gets a demo badge, the settings panels run as the demo, and the icon gets a DEMO ribbon. render.ps1
-     writes each listing's images into its own folder, alongside its description: marketplace/full/ and
-     marketplace/demo/. -->
+     With ?demo, every slide gets a demo badge, the settings panels run as the demo, and the icon gets a DEMO
+     ribbon. Slides #2 and #4 are also animated, as 1920x1080 MP4s (the Marketplace's video size), by
+     animate.ps1 - see ANIMATIONS in the script. render.ps1 writes each listing's images and videos into its own
+     folder, alongside its description: marketplace/full/ and marketplace/demo/. -->
 <style>
   :root {
     --bg1: #1b1e25; --bg2: #0e1014;
@@ -19,6 +20,8 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 1920px; height: 960px; overflow: hidden; background: var(--bg2); }
+  /* ?video: the Marketplace's video size, each slide centered in it as in its image. */
+  html.video, html.video body { height: 1080px; }
   body { font-family: "Segoe UI", system-ui, sans-serif; color: var(--ink); }
   .slide { display: none; position: absolute; inset: 0; padding: 80px 110px;
     background: radial-gradient(1200px 700px at 75% 40%, #2a2550 0%, transparent 60%), linear-gradient(135deg, var(--bg1), var(--bg2)); }
@@ -29,6 +32,8 @@
   .col { display: flex; flex-direction: column; justify-content: center; }
   .tag { display: inline-block; font-size: 22px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #b9a8ff; margin-bottom: 18px; }
   .cap { font-size: 26px; color: var(--muted); text-align: center; margin-top: 18px; }
+  /* A caption naming its key's device over the device's state (the animations). */
+  .cap b { display: block; color: var(--ink); font-weight: 600; margin-bottom: 2px; }
 
   /* ---- Device: a stylised Stream Deck keypad. Keys show the 288px icon edge to edge, as Stream Deck does. ---- */
   .deck { --k: 170px; display: inline-grid; grid-template-columns: repeat(var(--cols, 3), var(--k)); gap: calc(var(--k) * .26);
@@ -37,6 +42,8 @@
   .key { position: relative; width: var(--k); height: var(--k); border-radius: 16%; background: #000;
     box-shadow: 0 0 0 3px #111, 0 6px 14px rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.07); }
   .key.hl { box-shadow: 0 0 0 3px #111, 0 0 0 9px var(--accent), 0 6px 14px rgba(0,0,0,.6); }
+  /* A key being pressed, sunk in and ringed (the animations). */
+  .key.pressed { transform: scale(.9); box-shadow: 0 0 0 3px #111, 0 0 0 9px var(--accent), 0 6px 14px rgba(0,0,0,.6); }
   .key i, .glyph { display: block; position: absolute; inset: 0; background: #fff;
     -webkit-mask: var(--icon) center / 100% 100% no-repeat; mask: var(--icon) center / 100% 100% no-repeat; }
   .key svg.alert { position: absolute; left: 22%; top: 20%; width: 56%; height: 56%; }
@@ -70,6 +77,36 @@
 
   .press { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 26px; color: var(--muted); }
   .press svg { width: 130px; height: 52px; }
+
+  /* ---- A note under a slide's keys, with color swatches (slide 2) ---- */
+  .color-note { display: flex; align-items: center; gap: 12px; margin-top: 56px; padding: 14px 28px 14px 22px; border-radius: 999px;
+    background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.08); font-size: 25px; color: var(--muted); }
+  .color-note b { color: var(--ink); font-weight: 600; }
+  .color-note .sw { width: 22px; height: 22px; border-radius: 50%; flex: none; }
+  .color-note .sw + span:not(.sw) { margin-left: 8px; }
+
+  /* ---- The two actions side by side (slide 1), each in a panel of its own, with "or" between ---- */
+  .modes { display: flex; align-items: stretch; gap: 36px; margin-top: 50px; }
+  .mode { width: 760px; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 34px 40px 30px;
+    border-radius: 24px; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.08); }
+  .mode .tag { margin-bottom: 8px; }
+  .mode h3 { font-size: 38px; font-weight: 600; margin-bottom: 30px; }
+  .mode p { font-size: 25px; color: var(--muted); line-height: 1.35; margin-top: auto; padding-top: 26px; }
+  .or { align-self: center; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; flex: none;
+    background: var(--panel); border: 1px solid #3a3a3a; font-size: 24px; color: var(--muted); }
+  /* Device names under a deck's keys, one column per key, spaced like the keys themselves. */
+  .keycaps { display: grid; grid-template-columns: repeat(var(--cols, 1), var(--k)); column-gap: calc(var(--k) * .26);
+    padding: 0 calc(var(--k) * .3); margin-top: 14px; font-size: 22px; color: #c8cbd2; }
+  .flip { display: flex; align-items: flex-start; gap: 34px; }
+  .flip > div { display: flex; flex-direction: column; align-items: center; }
+  .flip .press { margin-top: 52px; }
+  /* What a Toggle key switches to, each device on a line of its own with its icon. */
+  .devs { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+  .devs div { display: flex; align-items: center; gap: 6px; font-size: 22px; color: #c8cbd2; }
+  .devs .ic { position: relative; width: 42px; height: 42px; flex: none; }
+  .devs .ic .glyph { background: #c8cbd2; }
+  .devs .both { color: #b9a8ff; }
+  .devs .both .ic .glyph { background: #b9a8ff; }
 
   /* ---- App icon (288x288 Marketplace icon) ---- */
   .appicon { position: relative; flex: none; overflow: hidden; background: linear-gradient(135deg, #7c5cff 0%, #2f7dff 100%); }
@@ -150,17 +187,38 @@
   </div>
 </section>
 
-<!-- 1. Toggle action -->
+<!-- 1. The two actions: Set, a key for each device, or Toggle, one key flipping between two - shown set to Both, so
+     each side brings its mic along (in the accent color, as what Both adds). In the demo, the Toggle key's counter
+     drops by one across the press. -->
 <section class="slide" id="s1" style="flex-direction:column; align-items:center; justify-content:center;">
-  <span class="tag">Toggle Audio Device</span>
-  <h2 style="text-align:center;">One key, two devices</h2>
-  <p class="lead" style="text-align:center; margin-top:14px;">Press to flip between headphones and speakers. The key shows which one is playing.</p>
-  <div style="display:flex; gap:44px; align-items:center; margin-top:64px;">
-    <div class="sound" style="width:360px;" data-sound='[["headphones","Headphones","",1],["speaker","Speakers",""]]'></div>
-    <div class="deck" style="--cols:1; --k:170px;" data-keys='[["headphones"]]'></div>
-    <div class="press"><svg><use href="#arrow"/></svg>Press<svg style="transform:scaleX(-1)"><use href="#arrow"/></svg></div>
-    <div class="deck" style="--cols:1; --k:170px;" data-keys='[["speaker"]]'></div>
-    <div class="sound" style="width:360px;" data-sound='[["headphones","Headphones",""],["speaker","Speakers","",1]]'></div>
+  <span class="tag">Set or Toggle</span>
+  <h2 style="text-align:center;">A key per device, or one key for two</h2>
+  <p class="lead" style="text-align:center; margin-top:14px;">Give every device a key of its own, or flip between two with a single press.</p>
+  <div class="modes">
+    <div class="mode">
+      <span class="tag">Set Audio Device</span>
+      <h3>A key for each device</h3>
+      <div class="deck" style="--cols:3; --k:130px;" data-keys='[["headphones","","",7],["speaker","#606060","",9],["Earbuds","#606060","",10]]'></div>
+      <div class="keycaps" style="--cols:3; --k:130px;"><span>Headphones</span><span>Speakers</span><span>Earbuds</span></div>
+      <p>The lit key shows which device is playing.</p>
+    </div>
+    <div class="or">or</div>
+    <div class="mode">
+      <span class="tag">Toggle Audio Device</span>
+      <h3>One key, two devices</h3>
+      <div class="flip">
+        <div>
+          <div class="deck" style="--cols:1; --k:130px;" data-keys='[["headphones","","",8]]'></div>
+          <div class="devs" data-devs='[["headphones","Headphones"],["mic","Headset Mic",1]]'></div>
+        </div>
+        <div class="press"><svg><use href="#arrow"/></svg>Press<svg style="transform:scaleX(-1)"><use href="#arrow"/></svg></div>
+        <div>
+          <div class="deck" style="--cols:1; --k:130px;" data-keys='[["speaker","","",7]]'></div>
+          <div class="devs" data-devs='[["speaker","Speakers"],["mic","USB Mic",1]]'></div>
+        </div>
+      </div>
+      <p>With Both, a mic switches along with each.</p>
+    </div>
   </div>
 </section>
 
@@ -170,11 +228,16 @@
   <h2 style="text-align:center;">Know what's active at a glance</h2>
   <p class="lead" style="text-align:center; margin-top:14px;">Keys update the moment the device changes, even when you switch it in Windows.</p>
   <div style="display:flex; gap:70px; margin-top:64px;">
-    <div><div class="deck" style="--cols:1; --k:190px;" data-keys='[["headphones"]]'></div><div class="cap">Active</div></div>
-    <div><div class="deck" style="--cols:1; --k:190px;" data-keys='[["speaker","#606060"]]'></div><div class="cap">Not active</div></div>
-    <div><div class="deck" style="--cols:1; --k:190px;" data-keys='[["mic"]]'></div><div class="cap">Microphones too</div></div>
-    <div class="full-only"><div class="deck" style="--cols:1; --k:190px;" data-keys='[["Earbuds","#606060","alert"]]'></div><div class="cap">Pressed while unplugged</div></div>
-    <div class="demo-only"><div class="deck" style="--cols:1; --k:190px;" data-keys='[["Earbuds","#606060","alert",0]]'></div><div class="cap">No switches left</div></div>
+    <div data-live="hp"><div class="deck" style="--cols:1; --k:190px;" data-keys='[["headphones","#3ddc84"]]'></div><div class="cap">Active</div></div>
+    <div data-live="spk"><div class="deck" style="--cols:1; --k:190px;" data-keys='[["speaker","#606060"]]'></div><div class="cap">Not active</div></div>
+    <div data-live="mic"><div class="deck" style="--cols:1; --k:190px;" data-keys='[["mic","#ff6b9a"]]'></div><div class="cap">Microphones too</div></div>
+    <div data-live="eb" class="full-only"><div class="deck" style="--cols:1; --k:190px;" data-keys='[["Earbuds","#606060","alert"]]'></div><div class="cap">Pressed while unplugged</div></div>
+    <div data-live="eb" class="demo-only"><div class="deck" style="--cols:1; --k:190px;" data-keys='[["Earbuds","#606060","alert",0]]'></div><div class="cap">No switches left</div></div>
+  </div>
+  <!-- The swatches are the keys' own colors above: the headphones' and mic's On, and the default Off grey. -->
+  <div class="color-note">
+    <span class="sw" style="background:#3ddc84"></span><span class="sw" style="background:#ff6b9a"></span><span class="sw" style="background:#606060"></span>
+    <span><b>Custom On and Off colors:</b> choose how each key looks while its device is active, and while it isn't.</span>
   </div>
 </section>
 
@@ -200,9 +263,9 @@
   <h2 style="text-align:center;">Make every key yours</h2>
   <p class="lead" style="text-align:center; margin-top:14px;">Pick an icon for each device and color it. Set keys get their own On and Off colors.</p>
   <div style="display:flex; gap:70px; align-items:center; margin-top:56px;">
-    <div class="pi" data-pi='{"action":"set","sections":[1],"settings":{"direction":"output","role":"all","matchStrategy":"Fuzzy","primary":"out-hp","icon":"headphones","iconBrightColor":"#4cc9f0","iconDarkColor":"#2a4752","hideUnavailable":true,"hideDeviceType":false,"demoSwitchesUsed":3}}'></div>
+    <div class="pi" id="custom-pi" data-pi='{"action":"set","sections":[1],"settings":{"direction":"output","role":"all","matchStrategy":"Fuzzy","primary":"out-hp","icon":"headphones","iconBrightColor":"#4cc9f0","iconDarkColor":"#2a4752","hideUnavailable":true,"hideDeviceType":false,"demoSwitchesUsed":3}}'></div>
     <div style="font-size:64px; color:var(--muted);">→</div>
-    <div class="deck" style="--cols:3; --k:140px;" data-keys='[["headphones","#4cc9f0"],["speaker","#ff9f43"],["Earbuds","#3ddc84"],["headphones","#2a4752"],["mic","#ff6b9a"],["mic","#b388ff"]]'></div>
+    <div class="deck" id="custom-deck" style="--cols:3; --k:140px;" data-keys='[["headphones","#4cc9f0"],["speaker","#ff9f43"],["Earbuds","#3ddc84"],["headphones","#2a4752"],["mic","#ff6b9a"],["mic","#b388ff"]]'></div>
   </div>
 </section>
 
@@ -210,9 +273,101 @@
 <section class="slide" id="sicon"><div data-appicon style="width:288px; height:288px;"></div></section>
 
 <script>
-  // settings panels as the demo, and marks the icon.
-  const DEMO = new URLSearchParams(location.search).has("demo");
+  // ?demo renders the demo's listing: it badges every slide, runs the settings panels as the demo, and marks the icon.
+  // ?video sizes the page for the animations.
+  const params = new URLSearchParams(location.search);
+  const DEMO = params.has("demo");
   if (DEMO) document.body.classList.add("demo");
+  if (params.has("video")) document.documentElement.classList.add("video");
+  const n = location.hash.slice(1) || "thumbnail";
+
+  // ---- Animations: slides #2 and #4 also come as looping videos (animate.ps1). Each is a list of frames - states of
+  // the slide, each held for `ms` and then faded into the next over `fade` ms, the last into the first. ?frame=<i>
+  // shows frame i in place of the still image, and ?timeline lists the frames' timings in the page's title. ----
+  const FADE = 300;
+  const TAP = 40;  // into and out of a pressed key: a cut, near enough
+  const OFF = "#606060";
+
+  // #2: Set keys switching. The output moves between the headphones and the speakers and the mic comes on as their
+  // keys are pressed, the unplugged earbuds (in the demo, out of switches) alert when pressed, and the mic goes off
+  // again when it's switched in Windows. In the demo, each press that switches uses one of that key's switches.
+  function liveFrames() {
+    // [icon, name, On color - empty keeps the icon's own white]
+    const KEYS = { hp: ["headphones", "Headphones", "#3ddc84"], spk: ["speaker", "Speakers", ""], mic: ["mic", "Microphone", "#ff6b9a"], eb: ["Earbuds", "Earbuds"] };
+    const states = [
+      { ms: 1500, out: "hp" },
+      { ms: 180, out: "hp", press: "mic" },
+      { ms: 1300, out: "hp", mic: true },
+      { ms: 180, out: "hp", mic: true, press: "spk" },
+      { ms: 1500, out: "spk", mic: true },
+      { ms: 180, out: "spk", mic: true, press: "eb" },
+      { ms: 1300, out: "spk", mic: true, alert: true },
+      { ms: 900, out: "spk", mic: true },
+      { ms: 180, out: "spk", mic: true, press: "hp" },
+      { ms: 1300, out: "hp", mic: true },
+      { ms: 1700, out: "hp", windows: true },
+    ];
+    const left = { hp: 8, spk: 6, mic: 9, eb: 0 };
+    return states.map((s, i) => {
+      const prev = states[i - 1], next = states[(i + 1) % states.length];
+      if (prev?.press && prev.press !== "eb") left[prev.press]--;
+      const counts = { ...left };
+      const on = { hp: s.out === "hp", spk: s.out === "spk", mic: !!s.mic, eb: false };
+      return {
+        ms: s.ms, fade: s.press || next.press ? TAP : FADE,
+        apply() {
+          for (const [k, [id, name, color]] of Object.entries(KEYS)) {
+            const [state, stateColor] = on[k] ? ["Active", color || "var(--ink)"]
+              : k === "mic" && s.windows ? ["Switched in Windows", "var(--muted)"]
+              : k === "eb" ? [DEMO ? "No switches left" : s.alert ? "Pressed while unplugged" : "Unplugged", s.alert ? "#f5c400" : "var(--muted)"]
+              : ["Not active", "var(--muted)"];
+            const flag = s.press === k ? "press" : k === "eb" && s.alert ? "alert" : "";
+            document.querySelectorAll(`[data-live="${k}"]`).forEach((el) => {
+              el.querySelector(".deck").dataset.keys = JSON.stringify([[id, on[k] ? color : OFF, flag, counts[k]]]);
+              el.querySelector(".cap").innerHTML = `<b>${name}</b><span style="color:${stateColor}">${state}</span>`;
+            });
+          }
+        },
+      };
+    });
+  }
+
+  // #4: the key being set up (ringed) takes each icon and color picked in the panel, by turns, while each of the
+  // other keys changes to another look and back.
+  function customFrames() {
+    // [icon, On color, Off color]
+    const LOOKS = [
+      ["headphones", "#4cc9f0", "#2a4752"], ["speaker", "#4cc9f0", "#2a4752"], ["speaker", "#ff9f43", "#5a3a1c"],
+      ["earbuds", "#ff9f43", "#5a3a1c"], ["earbuds", "#3ddc84", "#1f4a33"], ["headphones", "#3ddc84", "#1f4a33"],
+      ["headphones", "#b388ff", "#3d2f5a"], ["speaker", "#b388ff", "#3d2f5a"], ["speaker", "#ff6b9a", "#5a2638"],
+      ["headphones", "#ff6b9a", "#5a2638"],
+    ];
+    // The other five keys: each as on the still image, and the look it changes to.
+    const OTHERS = [
+      [["speaker", "#ff9f43"], ["headphones", "#ff9f43"]], [["Earbuds", "#3ddc84"], ["Earbuds", "#ffd166"]],
+      [["headphones", "#2a4752"], ["headphones", "#4cc9f0"]], [["mic", "#ff6b9a"], ["mic", "#3ddc84"]],
+      [["mic", "#b388ff"], ["speaker", "#b388ff"]],
+    ];
+    const box = document.getElementById("custom-pi"), deck = document.getElementById("custom-deck");
+    return LOOKS.map(([iconId, on, off], i) => ({
+      ms: 900, fade: FADE,
+      apply() {
+        const cfg = JSON.parse(box.dataset.pi);
+        Object.assign(cfg.settings, { icon: iconId, iconBrightColor: on, iconDarkColor: off });
+        box.dataset.pi = JSON.stringify(cfg);
+        // Other key k changes at frame k + 1 and back at frame k + 6 (the last one back at frame 0, looping round).
+        const others = OTHERS.map((looks, k) => looks[i > k && i <= k + 5 ? 1 : 0]);
+        deck.dataset.keys = JSON.stringify([[iconId === "earbuds" ? "Earbuds" : iconId, on, "hl"], ...others]);
+      },
+    }));
+  }
+
+  const ANIMATIONS = { 2: liveFrames, 4: customFrames };
+  if (ANIMATIONS[n]) {
+    const frames = ANIMATIONS[n]();
+    if (params.has("timeline")) document.title = JSON.stringify(frames.map(({ ms, fade }) => ({ ms, fade })));
+    if (params.has("frame")) frames[Number(params.get("frame"))].apply();
+  }
 
   const ICONS = "../../shared/AudioDevicesIcons/";
   const PI = "../../shared/propertyinspector/index.html";
@@ -225,7 +380,8 @@
   });
 
   // [icon, color, flag, count]: an empty color keeps the icon's own white, as the plugin does; "hl" rings the key;
-  // "alert" shows the warning triangle in place of the image, as Stream Deck's showAlert() does. An empty icon
+  // "press" shows it pressed; "alert" shows the warning triangle in place of the image, as Stream Deck's
+  // showAlert() does. An empty icon
   // is an unused key. In the demo every key also shows its switches-left counter: `count`, or else one from a
   // spread of plausible values.
   const DEMO_COUNTS = [8, 6, 9, 3, 7, 5];
@@ -233,7 +389,7 @@
   document.querySelectorAll(".deck[data-keys]").forEach((deck) => {
     for (const [id, color, flag, count] of JSON.parse(deck.dataset.keys)) {
       const key = document.createElement("div");
-      key.className = "key" + (flag === "hl" ? " hl" : "");
+      key.className = "key" + ({ hl: " hl", press: " pressed" }[flag] ?? "");
       if (flag === "alert") key.innerHTML = `<svg class="alert"><use href="#alert"/></svg>`;
       else if (id) key.innerHTML = `<i style="--icon:${icon(id)}; ${color ? `background:${color}` : ""}"></i>`;
       if (DEMO && (id || flag)) key.insertAdjacentHTML("beforeend", `<b class="count">${count ?? DEMO_COUNTS[keyIndex++ % DEMO_COUNTS.length]}</b>`);
@@ -246,6 +402,12 @@
     card.innerHTML = `<div class="sound-h">${card.dataset.title || "Sound output"}</div>` + JSON.parse(card.dataset.sound).map(([id, name, iface, on]) =>
       `<div class="sound-r${on ? " on" : ""}"><div class="ic"><i class="glyph" style="--icon:${icon(id)}"></i></div>`
       + `<div><b>${name}</b>${iface ? `<em>${iface}</em>` : ""}</div>${on ? `<span class="chk">✓</span>` : ""}</div>`).join("");
+  });
+
+  // [icon, device name, what Both adds]: the devices a Toggle key switches to, under that key.
+  document.querySelectorAll(".devs[data-devs]").forEach((list) => {
+    list.innerHTML = JSON.parse(list.dataset.devs).map(([id, name, both]) =>
+      `<div${both ? ` class="both"` : ""}><span class="ic"><i class="glyph" style="--icon:${icon(id)}"></i></span>${name}</div>`).join("");
   });
 
   // ---- Property inspector: the real one, talking to a fake Stream Deck socket ----
@@ -284,10 +446,12 @@
 
   document.querySelectorAll(".pi[data-pi]").forEach((box) => {
     const cfg = JSON.parse(box.dataset.pi);
-    // Both (Set only) picks its primary device from the outputs and its secondary from the inputs.
+    // Both picks its inputs from the inputs: Set's secondary device, and Toggle's primaryInput and secondaryInput.
     const direction = cfg.settings.direction;
-    const devicesFor = (k) => direction === "input" || (direction === "both" && k === "secondary") ? INPUTS : OUTPUTS;
-    for (const k of ["primary", "secondary"]) if (cfg.settings[k]) cfg.settings[k] = devicesFor(k)[cfg.settings[k]];
+    const isInput = (k) => direction === "input" || k.endsWith("Input") || (direction === "both" && cfg.action === "set" && k === "secondary");
+    for (const k of ["primary", "secondary", "primaryInput", "secondaryInput"]) {
+      if (cfg.settings[k]) cfg.settings[k] = (isInput(k) ? INPUTS : OUTPUTS)[cfg.settings[k]];
+    }
 
     const frame = document.createElement("iframe");
     frame.src = PI;
@@ -322,7 +486,6 @@
     document.querySelector("#sicon .appicon").insertAdjacentHTML("beforeend", `<div class="ribbon">DEMO</div>`);
   }
 
-  const n = location.hash.slice(1) || "thumbnail";
   document.getElementById("s" + n).classList.add("on");
 </script>
 </body>

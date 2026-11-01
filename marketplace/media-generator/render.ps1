@@ -2,7 +2,7 @@
 # full version into ..\full\, and the demo version (gallery.html?demo) into ..\demo\. Each slide id maps to section
 # #s<id>: #thumbnail is the listing card, written as thumbnail.png; #1..#4 are the gallery, written as
 # gallery-<id>.png (all 1920x960, Elgato Marketplace thumbnail/gallery size); #icon is the 288x288 Marketplace app
-# icon, written as icon.png.
+# icon, written as icon.png. #2 and #4 are also written as videos, gallery-<id>.mp4, by animate.ps1.
 $edge = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 $html = (Resolve-Path "$PSScriptRoot\gallery.html").Path
 $uri = ([System.Uri]$html).AbsoluteUri
@@ -30,3 +30,6 @@ foreach ($edition in @("full", "demo")) {
     }
     Render "$uri$query#icon" "288,288" (Join-Path $dir "icon.png")
 }
+
+# Then the animated slides, as videos (needs ffmpeg - see animate.ps1).
+& (Join-Path $PSScriptRoot "animate.ps1")

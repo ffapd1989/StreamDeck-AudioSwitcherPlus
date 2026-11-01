@@ -1,17 +1,18 @@
 Audio Switcher Plus (Demo) changes your Windows audio device from a Stream Deck key. It's the demo of Audio Switcher Plus, with every feature of the full version, but each key switches devices 10 times. Every key shows which device is active, and a red badge shows how many switches it has left.
 
 Features
-• Toggle Audio Device: one key flips between two devices
+• Toggle Audio Device: one key flips between two devices (with Both, each brings its own mic)
 • Set Audio Device: one key per device, lit while that device is active
 • Output, input or both: switch speakers and headphones, microphones, or a headset's headphones and mic together
 • Role: Default, Communications (calling apps), or All for both
 • Live status: keys update instantly, even when you switch in Windows
 • Follows your devices: finds a device again after Windows renumbers it
 • Your icons and colors: headphones, speaker, earbuds or mic, in any color
+• Windows sound settings: open the classic Sound control panel or Sound in Windows Settings from a key, or from any key's settings
 
 Setup
 1. Drag "Toggle Audio Device" or "Set Audio Device" onto a key.
-2. Choose Output, Input or Both (Set Audio Device only) and the role, then pick your device (two for Toggle and Both).
+2. Choose Output, Input or Both and the role, then pick your device (two for Toggle; Both adds an input to each output).
 
 Demo limit: each key switches devices 10 times; pressing a device that's already active doesn't count. The full version has no limit and installs as a separate plugin:
 https://marketplace.elgato.com/product/audio-switcher-plus-78785833-a69e-4d6b-93df-e553707ecc8a
