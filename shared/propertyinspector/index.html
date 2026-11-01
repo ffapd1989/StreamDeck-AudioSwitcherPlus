@@ -137,6 +137,18 @@
     .grid button.on { border-color: var(--accent); background: #1e2033; }
     .grid button img { width: 30px; height: 30px; display: block; object-fit: contain; }
 
+    /* Buttons that open Windows' own sound settings, each with its key's icon on a key-like plate. */
+    .shortcuts { display: flex; gap: 6px; }
+    .shortcuts button {
+      flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 7px;
+      padding: 3px 8px 3px 3px; text-align: left; white-space: normal; line-height: 1.2;
+    }
+    .shortcuts img {
+      width: 38px; height: 38px; flex: none; display: block;
+      border-radius: 6px; background: #131318; border: 1px solid #35353f;
+    }
+    .shortcuts + .hint { margin: 4px 0 2px; }
+
     footer {
       margin-top: 6px; padding-top: 5px; border-top: 1px solid var(--line);
       text-align: center; color: var(--muted); font-size: 7.5pt; line-height: 1.4;
@@ -325,6 +337,23 @@
           </div>
           <div class="hint check-hint">Lists devices by interface name only, without the device type (endpoint name). A device renamed in Windows keeps its name in the list unless this is ticked.</div>
         </div>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Windows sound settings</summary>
+      <div class="body">
+        <div class="shortcuts">
+          <button onclick="openSoundWindow('openSoundControlPanel');" title="Open the classic Sound control panel (mmsys.cpl)">
+            <img id="soundControlPanelIcon" src="../SettingsIcons/sound-control-panel.png" alt="" />
+            <span>Sound Control Panel</span>
+          </button>
+          <button onclick="openSoundWindow('openSoundSettings');" title="Open Sound in Windows Settings">
+            <img id="soundSettingsIcon" src="../SettingsIcons/sound-settings.png" alt="" />
+            <span>Sound Settings</span>
+          </button>
+        </div>
+        <div class="hint">Opens Windows' own sound settings. The Sound Control Panel and Sound Settings actions put these on keys of their own.</div>
       </div>
     </details>
 
@@ -645,6 +674,11 @@
         return;
       }
 
+      if (payload.event === "getSoundIcons") {
+        receivedSoundIcons(payload);
+        return;
+      }
+
       if (payload.event !== "getDeviceList") return;
 
       const direction = settings.direction === "input" || settings.direction === "both" ? settings.direction : "output";
@@ -690,6 +724,17 @@
       settings.hideUnavailable = document.getElementById('hideUnavailable').checked;
       settings.hideDeviceType = document.getElementById('hideDeviceType').checked;
       send("setSettings", settings);
+    }
+
+    // The buttons that open Windows' own sound settings. They show the Sound keys' own images once the plugin
+    // sends them (it reads the icon from Windows); until then, or without them, the white icons shipped with it.
+    function openSoundWindow(event) {
+      send("sendToPlugin", { event });
+    }
+
+    function receivedSoundIcons(payload) {
+      if (payload.soundControlPanel) document.getElementById('soundControlPanelIcon').src = payload.soundControlPanel;
+      if (payload.soundSettings) document.getElementById('soundSettingsIcon').src = payload.soundSettings;
     }
 
     function setupForAction() {
@@ -773,6 +818,7 @@
         send("getGlobalSettings");
         send("sendToPlugin", { event: "getIconList" });
         send("sendToPlugin", { event: "getDeviceList" });
+        send("sendToPlugin", { event: "getSoundIcons" });
       };
       ws.onmessage = (event) => {
         const message = JSON.parse(event.data);

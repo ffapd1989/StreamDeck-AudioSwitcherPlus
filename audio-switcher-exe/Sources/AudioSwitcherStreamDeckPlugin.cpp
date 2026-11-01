@@ -208,7 +208,7 @@ void ShellOpen(
 }
 
 // Opens the classic Sound control panel, or (`settings`) Sound in the Settings
-// app - for the keys that open them.
+// app - for the keys that open them, and the property inspector's buttons.
 void OpenSoundWindow(const bool settings, std::function<void()> onFailure) {
   if (settings) {
     ShellOpen(L"ms-settings:sound", {}, std::move(onFailure));
@@ -841,6 +841,27 @@ void AudioSwitcherStreamDeckPlugin::SendToPlugin(
         {"event", event},
         {"icons", GetAvailableIconSets(mIconsDirectory)},
       }));
+    return;
+  }
+
+  // The Sound Control Panel and Sound Settings keys' images, for the buttons
+  // that open them.
+  if (event == "getSoundIcons") {
+    auto payload = json({{"event", event}});
+    if (const auto image = SoundKeyImageFor(false); !image.empty()) {
+      payload["soundControlPanel"] = image;
+    }
+    if (const auto image = SoundKeyImageFor(true); !image.empty()) {
+      payload["soundSettings"] = image;
+    }
+    mConnectionManager->SendToPropertyInspector(inAction, inContext, payload);
+    return;
+  }
+
+  if (event == "openSoundControlPanel" || event == "openSoundSettings") {
+    OpenSoundWindow(event == "openSoundSettings", [event] {
+      ESDLog("Couldn't open the window for {}", event);
+    });
     return;
   }
 }

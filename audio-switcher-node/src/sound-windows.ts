@@ -6,7 +6,7 @@ import { PLUGIN_ROOT } from "./edition";
 
 /**
  * Windows' own sound settings - the classic Sound control panel (mmsys.cpl) and Sound in the Settings app - which
- * the Sound Control Panel and Sound Settings keys open.
+ * the Sound Control Panel and Sound Settings keys open, and so do the buttons for them in the property inspector.
  */
 
 const WINDOWS_DIR = process.env.SystemRoot ?? "C:\\Windows";

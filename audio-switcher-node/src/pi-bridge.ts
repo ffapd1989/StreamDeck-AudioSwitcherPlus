@@ -1,9 +1,11 @@
 import streamDeck from "@elgato/streamdeck";
 import { audioDeviceService } from "./audio-device-service";
 import { listIconSets } from "./icon-registry";
+import { openSoundControlPanel, openSoundSettings, soundKeyImage } from "./sound-windows";
 
 /**
- * Handles the property inspector's "getDeviceList"/"getIconList" requests - ported from SendToPlugin()
+ * Handles the property inspector's "getDeviceList"/"getIconList"/"getSoundIcons" requests, and its buttons that
+ * open Windows' sound settings - ported from SendToPlugin()
  * in AudioSwitcherStreamDeckPlugin.cpp. Only one property inspector is ever visible at a time, so
  * `streamDeck.ui.sendToPropertyInspector` (unscoped) reaches the right one regardless of which action
  * type sent the request.
@@ -27,5 +29,16 @@ export async function handlePropertyInspectorMessage(event: string | undefined):
 
 	if (event === "getIconList") {
 		await streamDeck.ui.sendToPropertyInspector({ event, icons: listIconSets() });
+		return;
 	}
+
+	// The Sound Control Panel and Sound Settings keys' images, for the buttons that open them.
+	if (event === "getSoundIcons") {
+		const [soundControlPanel, soundSettings] = await Promise.all([soundKeyImage(false), soundKeyImage(true)]);
+		await streamDeck.ui.sendToPropertyInspector({ event, soundControlPanel, soundSettings });
+		return;
+	}
+
+	if (event === "openSoundControlPanel") openSoundControlPanel();
+	if (event === "openSoundSettings") openSoundSettings();
 }
