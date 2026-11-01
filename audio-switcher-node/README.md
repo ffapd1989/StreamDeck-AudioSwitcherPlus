@@ -16,7 +16,7 @@ That PowerShell process is started once and kept running while any button is on 
 
 ## Feature parity
 
-Same settings/behavior as the native build: input/output direction (or both at once, for "Set Audio Device"), default/communication/"all" role, fuzzy device matching for devices that get renumbered by Windows, and per-button custom icons/colors. Icons are pulled from [`../shared/AudioDevicesIcons/`](../shared/AudioDevicesIcons/) at build time (see `copy-shared-icons` in `rollup.config.mjs`) rather than kept as a separate copy.
+Same settings/behavior as the native build: input/output direction (or both at once - for "Toggle Audio Device", an input alongside each of its two outputs), default/communication/"all" role, fuzzy device matching for devices that get renumbered by Windows, per-button custom icons/colors, and the "Sound Control Panel" and "Sound Settings" keys and their buttons in the Set and Toggle keys' settings (which show the Sound control panel's icon, read from Windows by a one-off PowerShell call). Icons are pulled from [`../shared/AudioDevicesIcons/`](../shared/AudioDevicesIcons/) at build time (see `copy-shared-icons` in `rollup.config.mjs`) rather than kept as a separate copy.
 
 ## Building
 

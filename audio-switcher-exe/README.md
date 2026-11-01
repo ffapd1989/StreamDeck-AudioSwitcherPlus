@@ -11,9 +11,10 @@ original
 
 new
 - ability to set both default device **and** communication device
-- ability to set an output **and** an input device with one "Set Audio Device" button (direction "Both")
+- ability to switch an output **and** an input device with one button (direction "Both") - "Set Audio Device" sets the pair, "Toggle Audio Device" flips between two pairs (e.g. headphones with a headset mic, or speakers with a USB mic)
 - choosing a custom icon per button(headphones, earbuds, speaker, mic)
 - choosing custom colors for icons in both On and Off modes
+- "Sound Control Panel" and "Sound Settings" keys, which open Windows' classic Sound control panel (`mmsys.cpl`) or Sound in the Settings app - and buttons for both in the Set and Toggle keys' settings
 - simplified device selecton 
   - ability to remove unplugged devices
   - ability to remove device type (which windows gets wrong often) from selection box
@@ -28,9 +29,9 @@ By default, new buttons use fuzzy device matching and the "All" role (affecting 
 Both "Set Audio Device" and "Toggle Audio Device" buttons let you pick an icon (Earbuds, Headphones, Mic, or Speaker) instead of the plugin's default images, plus a color for each of the button's states:
 
 - **Set Audio Device** has one icon with two colors - "On" (shown when the configured device is the active one - with direction "Both", when both its devices are) and "Off" (shown otherwise, defaulting to a dimmed grey).
-- **Toggle Audio Device** has two icons - one per device it switches between - each with its own color, defaulting to white.
+- **Toggle Audio Device** has two icons - one per device (or, with direction "Both", per output-and-input pair) it switches between - each with its own color, defaulting to white.
 
-Icon choices are picked up automatically from [`../shared/AudioDevicesIcons/`](../shared/AudioDevicesIcons/) (copied into the plugin at build time); each file must be a white silhouette on a transparent background (the colors above are applied by recoloring the shape at runtime, not by swapping images), and its filename becomes the option's name in the picker. Drop in a new `<name>.png` file there to add another choice without any code changes.
+Icon choices are picked up automatically from [`../shared/AudioDevicesIcons/`](../shared/AudioDevicesIcons/) (copied into the plugin at build time); each file must be a white silhouette on a transparent background (the colors above are applied by recoloring the shape at runtime, not by swapping images), and its filename becomes the option's name in the picker. Drop in a new `<name>.png` file there to add another choice without any code changes. The "Sound Control Panel" and "Sound Settings" keys show the Sound control panel's own speaker icon, read from Windows (`mmsys.cpl`) when the key appears rather than shipped with the plugin, since it's Microsoft's artwork; Sound Settings adds a gear over it, from [`../shared/SettingsIcons/`](../shared/SettingsIcons/). That folder also holds the white icons Stream Deck shows for the two in its action list (and on the key, if Windows doesn't have the icon), kept apart from the picker's.
 
 # Release 0.1.0
 
@@ -58,7 +59,7 @@ cmake ..
 cmake --build . --config RelWithDebInfo --target install --parallel
 ```
 
-This compiles `sdaudioswitchplus.exe` and installs it, along with the property inspector, icons, and manifest, into `../com.morganscruggs.audioswitcherplus.sdPlugin` at the repo root (the default `CMAKE_INSTALL_PREFIX`, set by `set_default_install_dir_to_repo_root()` in `StreamDeckSDK.cmake`). The install step then automatically mirrors that folder into `%APPDATA%\Elgato\StreamDeck\Plugins\com.morganscruggs.audioswitcherplus.sdPlugin` (`sync_install_to_streamdeck_plugin_dir()`, same file) - the same way [the Node build](../audio-switcher-node/)'s rollup config syncs its own output. Configure with `-DSYNC_TO_STREAMDECK=OFF` to skip that sync (CI does, and it's also handy for building while Stream Deck is running), or set the `SYNC_TO_STREAMDECK` environment variable to `0` to skip it for one build, as with the Node build ([`build-all.ps1`](../build-all.ps1) does this, and installs everything itself once it's all built). The `build/` directory can be reused for later builds; swap `RelWithDebInfo` for `Debug` to build that configuration instead.
+This compiles `sdaudioswitchplus.exe` and installs it, along with the property inspector, icons, and manifest, into `../com.morganscruggs.audioswitcherplus.sdPlugin` at the repo root (the default `CMAKE_INSTALL_PREFIX`, set by `set_default_install_dir_to_repo_root()` in `StreamDeckSDK.cmake`). The install step then automatically mirrors that folder into `%APPDATA%\Elgato\StreamDeck\Plugins\com.morganscruggs.audioswitcherplus.sdPlugin` (`sync_install_to_streamdeck_plugin_dir()`, same file) - the same way [the Node build](../audio-switcher-node/)'s rollup config syncs its own output. Configure with `-DSYNC_TO_STREAMDECK=OFF` to skip that sync (CI does, and it's also handy for building while Stream Deck is running), or set the `SYNC_TO_STREAMDECK` environment variable to `0` to skip it for one build, as with the Node build ([`build-all.ps1`](../build-all.ps1) does this, leaving the install to [`install.ps1`](../install.ps1)). The `build/` directory can be reused for later builds; swap `RelWithDebInfo` for `Debug` to build that configuration instead.
 
 The version number comes from [`shared/VERSION`](../shared/VERSION), shared with the Node build, with the CI run number (or `0` locally) appended as the fourth component.
 

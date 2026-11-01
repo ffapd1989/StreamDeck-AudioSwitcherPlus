@@ -2,11 +2,11 @@
 
 StreamDeck-AudioSwitcherPlus is an Elgato Stream Deck plugin for setting the default Windows audio device. **Windows only** - macOS is not supported.
 
-> **This is a fork** of [Fred Emmott](https://github.com/fredemmott)'s original [StreamDeck-AudioOutputSwitcher](https://github.com/fredemmott/StreamDeck-AudioOutputSwitcher), extended with additional features (hiding disabled/unplugged devices, hiding device-type suffixes, an "All" button role, stripped Windows device-name prefixes, and per-button custom icons with color selection). All credit for the original plugin, its design, and the underlying audio-switching approach goes to Fred Emmott — please check out [his other Stream Deck plugins](https://github.com/fredemmott) as well.
+> **This is a fork** of [Fred Emmott](https://github.com/fredemmott)'s original [StreamDeck-AudioOutputSwitcher](https://github.com/fredemmott/StreamDeck-AudioOutputSwitcher), extended with additional features (hiding disabled/unplugged devices, hiding device-type suffixes, an "All" button role, stripped Windows device-name prefixes, per-button custom icons with color selection, and keys that open Windows' sound settings). All credit for the original plugin, its design, and the underlying audio-switching approach goes to Fred Emmott — please check out [his other Stream Deck plugins](https://github.com/fredemmott) as well.
 
 ## Two implementations, one plugin
 
-This repo contains two separate, independently-installable builds of the same plugin concept - same feature set (device direction, default/communication/"all" role, fuzzy device matching, custom icons/colors), different underlying tech:
+This repo contains two separate, independently-installable builds of the same plugin concept - same feature set (device direction, default/communication/"all" role, fuzzy device matching, custom icons/colors, sound settings keys), different underlying tech:
 
 | | [`audio-switcher-exe/`](audio-switcher-exe/) | [`audio-switcher-node/`](audio-switcher-node/) |
 |---|---|---|
@@ -35,13 +35,14 @@ The limit is meant to make paying easier than not, not to be tamper-proof: anyon
 
 Each build documents its own process - see the "Building"/"Building From Source" section of [the exe README](audio-switcher-exe/README.md#building-from-source) or [the node README](audio-switcher-node/README.md#building). Both build steps install straight into `%APPDATA%\Elgato\StreamDeck\Plugins\`, so **fully quit Stream Deck before building/installing**, then relaunch it afterward to pick up the change.
 
-To do all of it in one go, run [`build-all.ps1`](build-all.ps1) from the repo root:
+To do all of it in one go, use the two scripts at the repo root - one builds, the other installs:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build-all.ps1
+powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-It builds the Node plugin, the Node demo and the exe and packages all three into [`marketplace/`](marketplace/) (Node and exe into `full/`, the demo into `demo/`; add `-SkipPackage` to skip this) while Stream Deck keeps running, then quits Stream Deck just long enough to copy the three into its Plugins folder, and starts it again - even if the copy fails. If a build fails, Stream Deck is never closed. It needs the same tools as the individual builds: Node.js, CMake and Visual Studio 2022's C++ workload.
+[`build-all.ps1`](build-all.ps1) builds the Node plugin, the Node demo and the exe and packages all three into [`marketplace/`](marketplace/) (Node and exe into `full/`, the demo into `demo/`; add `-SkipPackage` to skip this). It never touches Stream Deck, which keeps running throughout. [`install.ps1`](install.ps1) then quits Stream Deck just long enough to copy whatever's been built into its Plugins folder, and starts it again - even if the copy fails. So build as often as you like, and install when you want to try the result. They need the same tools as the individual builds: Node.js, CMake and Visual Studio 2022's C++ workload.
 
 ## Releasing
 
