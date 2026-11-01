@@ -39,7 +39,7 @@ export class ToggleDeviceAction extends SingletonAction<ButtonSettings> {
 
 		applyIcons(action, "toggle", settings);
 		updateState(action, "toggle", settings, audioDeviceService.getSnapshot());
-		await backfillDeviceInfo(action, settings, audioDeviceService.getSnapshot());
+		await backfillDeviceInfo(action, "toggle", settings, audioDeviceService.getSnapshot());
 	}
 
 	override onWillDisappear(ev: WillDisappearEvent<ButtonSettings>): void {

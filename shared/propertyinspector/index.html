@@ -41,6 +41,8 @@
     .row > .ctl { flex: 1 1 auto; min-width: 0; display: flex; gap: 6px; align-items: center; }
     /* Sets off a device (with its icon) or the list options from what's above them in the same section. */
     .group { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px; }
+    /* Names each of Toggle's pairs in Both, over its output and input. */
+    .pair-heading { color: #bfbfbf; font-size: 8.5pt; font-weight: 600; margin-bottom: 4px; }
 
     select {
       background: var(--field); color: var(--fg); border: 1px solid #4a4a4a;
@@ -71,7 +73,7 @@
       background: #333; color: var(--muted); padding: 2px 12px; font-size: 8.5pt;
       cursor: pointer; user-select: none; border-left: 1px solid var(--line);
     }
-    /* Divided on the left, so hiding the last choice (Direction's Both, on Toggle) leaves no stray edge. */
+    /* Divided on the left, so hiding the last choice leaves no stray edge. */
     .seg label:first-of-type { border-left: 0; }
     .seg input:checked + label { background: #46617f; color: #eaf2fb; }
 
@@ -172,11 +174,12 @@
               <input id="input" type="radio" name="direction" value="input" onchange="updateDirection();" />
               <label for="input">Input</label>
               <input id="both" type="radio" name="direction" value="both" onchange="updateDirection();" />
-              <label for="both" id="bothLabel">Both</label>
+              <label for="both">Both</label>
             </div>
           </div>
         </div>
-        <div class="hint" id="directionHint">Both sets an output and an input device with one press, such as a headset's headphones and microphone. The key is on while both are active.</div>
+        <div class="hint" id="setDirectionHint">Both sets an output and an input device with one press, such as a headset's headphones and microphone. The key is on while both are active.</div>
+        <div class="hint" id="toggleDirectionHint">Both gives each device an input that switches along with it, such as a headset's microphone with its headphones. The key shows which pair is active.</div>
 
         <div class="row">
           <label>Role</label>
@@ -216,17 +219,33 @@
           <div class="body">
             <div class="card-heading" id="primaryDeviceInfoHeading">Primary</div>
             <div class="card" id="primaryDeviceInfo"></div>
+            <div id="primaryInputDeviceInfoDiv">
+              <div class="card-heading">Primary input</div>
+              <div class="card" id="primaryInputDeviceInfo"></div>
+            </div>
             <div id="secondaryDeviceInfoDiv">
               <div class="card-heading" id="secondaryDeviceInfoHeading">Secondary</div>
               <div class="card" id="secondaryDeviceInfo"></div>
             </div>
+            <div id="secondaryInputDeviceInfoDiv">
+              <div class="card-heading">Secondary input</div>
+              <div class="card" id="secondaryInputDeviceInfo"></div>
+            </div>
           </div>
         </details>
 
+        <div class="pair-heading" id="primaryHeading">Primary</div>
         <div class="row">
           <label id="primaryDeviceLabel" for="primaryDevice">Device</label>
           <div class="ctl">
             <select id="primaryDevice" onchange="saveSettings();"></select>
+          </div>
+        </div>
+        <!-- Toggle's Both: the input that switches along with each output. -->
+        <div class="row" id="primaryInputDeviceDiv">
+          <label for="primaryInputDevice">Input</label>
+          <div class="ctl">
+            <select id="primaryInputDevice" onchange="saveSettings();"></select>
           </div>
         </div>
 
@@ -247,10 +266,17 @@
 
         <!-- Toggle's second device, or the input of a Set key set to Both. -->
         <div class="group" id="secondaryDeviceDiv">
+          <div class="pair-heading" id="secondaryHeading">Secondary</div>
           <div class="row">
             <label id="secondaryDeviceLabel" for="secondaryDevice">Secondary</label>
             <div class="ctl">
               <select id="secondaryDevice" onchange="saveSettings();"></select>
+            </div>
+          </div>
+          <div class="row" id="secondaryInputDeviceDiv">
+            <label for="secondaryInputDevice">Input</label>
+            <div class="ctl">
+              <select id="secondaryInputDevice" onchange="saveSettings();"></select>
             </div>
           </div>
           <div id="secondaryIconDiv">
@@ -342,18 +368,30 @@
       return name.replace(/(^|\()[0-9]+- /, '$1');
     }
 
-    // "output", "input", or - Set only - "both", which picks an output as the primary device and an input as the
-    // secondary one.
+    // "output", "input", or "both", which picks an output and an input together: Set's as its primary and
+    // secondary devices, Toggle's as each of its two devices with an input of its own ("primaryInput",
+    // "secondaryInput").
     function currentDirection() {
       if (document.getElementById('both').checked) return 'both';
       return document.getElementById('input').checked ? 'input' : 'output';
     }
 
-    // The direction a device slot ("primary"/"secondary") is picked from.
+    // The device slots this action has, each saved under its own name in the settings.
+    function deviceSlots() {
+      return isSetAction ? ['primary', 'secondary'] : ['primary', 'secondary', 'primaryInput', 'secondaryInput'];
+    }
+
+    // Both's output-and-input slot pairs: Set's one, Toggle's two.
+    function slotPairs() {
+      return isSetAction ? [['primary', 'secondary']] : [['primary', 'primaryInput'], ['secondary', 'secondaryInput']];
+    }
+
+    // The direction a device slot is picked from.
     function slotDirection(slot) {
+      if (slot === 'primaryInput' || slot === 'secondaryInput') return 'input';
       const direction = currentDirection();
       if (direction !== 'both') return direction;
-      return slot === 'primary' ? 'output' : 'input';
+      return isSetAction && slot === 'secondary' ? 'input' : 'output';
     }
 
     function devicesFor(direction) {
@@ -371,8 +409,7 @@
     }
 
     function updateDeviceLists() {
-      fillDeviceList('primary');
-      fillDeviceList('secondary');
+      deviceSlots().forEach(fillDeviceList);
     }
 
     function fillDeviceList(slot) {
@@ -424,10 +461,10 @@
       });
 
       // A saved device that isn't listed (hidden, or no longer seen by Windows) stays as an option of its own,
-      // labelled as it was saved. Toggle picks both its devices from the one list, so each list offers both. A
-      // device saved while the other direction was selected must not be carried over (it would show up as a
-      // duplicate with the label saved from that other direction).
-      for (const other of ['primary', 'secondary']) {
+      // labelled as it was saved. Toggle picks both its devices (and, in Both, both their inputs) from the one
+      // list, so each list offers both. A device saved while the other direction was selected must not be
+      // carried over (it would show up as a duplicate with the label saved from that other direction).
+      for (const other of deviceSlots()) {
         const id = savedDeviceId(other);
         const savedDirection = savedDeviceDirection(other);
         if (!id || slotDirection(other) !== direction || (savedDirection && savedDirection !== direction)) continue;
@@ -496,13 +533,13 @@
     }
 
     function updateDirection() {
-      // A Set key's device follows it to whichever slot now holds its direction: Both keeps the output in the
-      // first slot and the input in the second, so an input moves to the second going into Both and back out.
-      if (isSetAction) {
-        const direction = currentDirection();
-        if (direction === 'both' && savedDeviceDirection('primary') === 'input') copyDevice('primary', 'secondary');
-        else if (direction === 'input' && savedDeviceDirection('primary') !== 'input' && savedDeviceDirection('secondary') === 'input') {
-          copyDevice('secondary', 'primary');
+      // A device follows its direction to whichever slot now holds it: Both keeps each pair's output in its
+      // first slot and its input in the second, so an input moves to the second going into Both and back out.
+      const direction = currentDirection();
+      for (const [outputSlot, inputSlot] of slotPairs()) {
+        if (direction === 'both' && savedDeviceDirection(outputSlot) === 'input') copyDevice(outputSlot, inputSlot);
+        else if (direction === 'input' && savedDeviceDirection(outputSlot) !== 'input' && savedDeviceDirection(inputSlot) === 'input') {
+          copyDevice(inputSlot, outputSlot);
         }
       }
       setupForDirection();
@@ -610,7 +647,7 @@
 
       if (payload.event !== "getDeviceList") return;
 
-      const direction = settings.direction === "input" || (settings.direction === "both" && isSetAction) ? settings.direction : "output";
+      const direction = settings.direction === "input" || settings.direction === "both" ? settings.direction : "output";
       document.getElementById(direction).checked = true;
 
       const role = settings.role || "all";
@@ -636,13 +673,15 @@
     }
 
     function saveSettings() {
-      const primaryId = document.getElementById('primaryDevice').value;
-      const secondaryId = document.getElementById('secondaryDevice').value;
-      // An empty ID means the list is empty.
-      settings.primary = devicesFor(slotDirection('primary'))[primaryId];
-      settings.primaryLabel = primaryId ? document.querySelector(`#primaryDevice option[value="${primaryId}"]`)?.label : undefined;
-      settings.secondary = devicesFor(slotDirection('secondary'))[secondaryId];
-      settings.secondaryLabel = secondaryId ? document.querySelector(`#secondaryDevice option[value="${secondaryId}"]`)?.label : undefined;
+      for (const slot of deviceSlots()) {
+        const selector = document.getElementById(`${slot}Device`);
+        const id = selector.value;
+        // An empty ID means the list is empty.
+        settings[slot] = devicesFor(slotDirection(slot))[id];
+        settings[`${slot}Label`] = id ? selector.querySelector(`option[value="${id}"]`)?.label : undefined;
+        selector.title = settings[`${slot}Label`] || '';
+        renderDeviceInfo(`${slot}DeviceInfo`, settings[slot], settings[`${slot}Label`]);
+      }
       settings.direction = currentDirection();
       if (document.getElementById('allRole').checked) settings.role = 'all';
       else if (document.getElementById('communicationRole').checked) settings.role = 'communication';
@@ -650,16 +689,12 @@
       settings.matchStrategy = document.getElementById('exactMatch').checked ? 'ID' : 'Fuzzy';
       settings.hideUnavailable = document.getElementById('hideUnavailable').checked;
       settings.hideDeviceType = document.getElementById('hideDeviceType').checked;
-      document.getElementById('primaryDevice').title = settings.primaryLabel || '';
-      document.getElementById('secondaryDevice').title = settings.secondaryLabel || '';
-      renderDeviceInfo('primaryDeviceInfo', settings.primary, settings.primaryLabel);
-      renderDeviceInfo('secondaryDeviceInfo', settings.secondary, settings.secondaryLabel);
       send("setSettings", settings);
     }
 
     function setupForAction() {
-      document.getElementById('bothLabel').classList.toggle('hidden', !isSetAction);
-      document.getElementById('directionHint').classList.toggle('hidden', !isSetAction);
+      document.getElementById('setDirectionHint').classList.toggle('hidden', !isSetAction);
+      document.getElementById('toggleDirectionHint').classList.toggle('hidden', isSetAction);
       document.getElementById('iconDiv').classList.toggle('hidden', !isSetAction);
       document.getElementById('primaryIconDiv').classList.toggle('hidden', isSetAction);
       document.getElementById('secondaryIconDiv').classList.toggle('hidden', isSetAction);
@@ -669,18 +704,25 @@
       setupForDirection();
     }
 
-    // What also depends on the direction: Set's Both picks two devices, an output and an input.
+    // What also depends on the direction: Both picks an input along with each output - Set's one output, as its
+    // second device, and each of Toggle's two, under that device's heading.
     function setupForDirection() {
-      const twoDevices = !isSetAction || currentDirection() === 'both';
+      const both = currentDirection() === 'both';
+      const twoDevices = !isSetAction || both;
+      const pairs = !isSetAction && both;
       document.getElementById('devicesSummary').textContent =
         !isSetAction ? 'Devices & icons' : twoDevices ? 'Devices & icon' : 'Device & icon';
-      document.getElementById('primaryDeviceLabel').textContent = !isSetAction ? 'Primary' : twoDevices ? 'Output' : 'Device';
-      document.getElementById('secondaryDeviceLabel').textContent = isSetAction ? 'Input' : 'Secondary';
-      document.getElementById('primaryDeviceInfoHeading').textContent = isSetAction ? 'Output' : 'Primary';
-      document.getElementById('secondaryDeviceInfoHeading').textContent = isSetAction ? 'Input' : 'Secondary';
+      document.getElementById('primaryDeviceLabel').textContent = both ? 'Output' : isSetAction ? 'Device' : 'Primary';
+      document.getElementById('secondaryDeviceLabel').textContent = isSetAction ? 'Input' : both ? 'Output' : 'Secondary';
+      document.getElementById('primaryDeviceInfoHeading').textContent = isSetAction ? 'Output' : both ? 'Primary output' : 'Primary';
+      document.getElementById('secondaryDeviceInfoHeading').textContent = isSetAction ? 'Input' : both ? 'Secondary output' : 'Secondary';
       document.getElementById('secondaryDeviceDiv').classList.toggle('hidden', !twoDevices);
       document.getElementById('secondaryDeviceInfoDiv').classList.toggle('hidden', !twoDevices);
       document.getElementById('primaryDeviceInfoHeading').classList.toggle('hidden', !twoDevices);
+      for (const id of ['primaryHeading', 'secondaryHeading', 'primaryInputDeviceDiv', 'secondaryInputDeviceDiv',
+        'primaryInputDeviceInfoDiv', 'secondaryInputDeviceInfoDiv']) {
+        document.getElementById(id).classList.toggle('hidden', !pairs);
+      }
     }
 
     // The demo has every feature, but each key only switches devices a few times - the plugin counts them in

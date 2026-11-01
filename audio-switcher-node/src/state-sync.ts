@@ -7,20 +7,30 @@ import type { AudioDeviceDirection, AudioDeviceRole, AudioSnapshot, ButtonSettin
 
 export type ActionKind = "set" | "toggle";
 
-type DeviceSlot = "primary" | "secondary";
+type DeviceSlot = "primary" | "secondary" | "primaryInput" | "secondaryInput";
 
-/** The direction a configured device is picked from: Set's "both" has its output as primary and its input as secondary. */
-function slotDirection(settings: ButtonSettings, slot: DeviceSlot): AudioDeviceDirection {
+const DEVICE_SLOTS = ["primary", "secondary", "primaryInput", "secondaryInput"] as const;
+
+// What "both" switches, output then input: Set's own two devices, or one of Toggle's two pairs.
+const SET_BOTH_SLOTS = ["primary", "secondary"] as const;
+const TOGGLE_PAIR_SLOTS = { primary: ["primary", "primaryInput"], secondary: ["secondary", "secondaryInput"] } as const;
+
+/**
+ * The direction a configured device is picked from. In "both", Set has its output as primary and its input as
+ * secondary, while Toggle's primary and secondary are both outputs, each with its own input (see ButtonDirection).
+ */
+function slotDirection(settings: ButtonSettings, kind: ActionKind, slot: DeviceSlot): AudioDeviceDirection {
+	if (slot === "primaryInput" || slot === "secondaryInput") return "input";
 	if (settings.direction !== "both") return settings.direction;
-	return slot === "primary" ? "output" : "input";
+	return kind === "set" && slot === "secondary" ? "input" : "output";
 }
 
-function slotSnapshot(snapshot: AudioSnapshot | undefined, settings: ButtonSettings, slot: DeviceSlot): DirectionSnapshot | undefined {
-	return snapshot?.[slotDirection(settings, slot)];
+function slotSnapshot(snapshot: AudioSnapshot | undefined, settings: ButtonSettings, kind: ActionKind, slot: DeviceSlot): DirectionSnapshot | undefined {
+	return snapshot?.[slotDirection(settings, kind, slot)];
 }
 
-function resolveDeviceId(settings: ButtonSettings, slot: DeviceSlot, snapshot: AudioSnapshot | undefined): string {
-	return getVolatileDeviceId(settings[slot], settings.matchStrategy, slotSnapshot(snapshot, settings, slot));
+function resolveDeviceId(settings: ButtonSettings, kind: ActionKind, slot: DeviceSlot, snapshot: AudioSnapshot | undefined): string {
+	return getVolatileDeviceId(settings[slot], settings.matchStrategy, slotSnapshot(snapshot, settings, kind, slot));
 }
 
 function defaultIdForRole(dirSnap: DirectionSnapshot | undefined, role: ButtonSettings["role"]): string {
@@ -37,11 +47,18 @@ function rolesFor(settings: ButtonSettings): AudioDeviceRole[] {
 	return settings.role === "all" ? ["default", "communication"] : [settings.role];
 }
 
-/** Set's "both": its configured devices (output, then input), each with its own direction's snapshot. */
-function bothDevices(settings: ButtonSettings, snapshot: AudioSnapshot | undefined): { deviceId: string; dirSnap: DirectionSnapshot | undefined }[] {
-	return (["primary", "secondary"] as const)
-		.map((slot) => ({ deviceId: resolveDeviceId(settings, slot, snapshot), dirSnap: slotSnapshot(snapshot, settings, slot) }))
+type BothDevice = { deviceId: string; dirSnap: DirectionSnapshot | undefined };
+
+/** The configured devices among "both"'s `slots` (output, then input), each with its own direction's snapshot. */
+function bothDevices(settings: ButtonSettings, kind: ActionKind, slots: readonly DeviceSlot[], snapshot: AudioSnapshot | undefined): BothDevice[] {
+	return slots
+		.map((slot) => ({ deviceId: resolveDeviceId(settings, kind, slot, snapshot), dirSnap: slotSnapshot(snapshot, settings, kind, slot) }))
 		.filter(({ deviceId }) => deviceId);
+}
+
+/** Whether every one of `devices` is active; a slot left unset doesn't count against it, but none set at all isn't. */
+function allActive(devices: BothDevice[], role: ButtonSettings["role"]): boolean {
+	return devices.length > 0 && devices.every(({ deviceId, dirSnap }) => isActiveForRole(dirSnap, role, deviceId));
 }
 
 /**
@@ -50,10 +67,15 @@ function bothDevices(settings: ButtonSettings, snapshot: AudioSnapshot | undefin
  * in AudioSwitcherStreamDeckPlugin.cpp. Needed for fuzzy matching, which compares interfaceName/
  * endpointName, not just id.
  */
-export async function backfillDeviceInfo(action: KeyAction<ButtonSettings>, settings: ButtonSettings, snapshot: AudioSnapshot | undefined): Promise<void> {
+export async function backfillDeviceInfo(
+	action: KeyAction<ButtonSettings>,
+	kind: ActionKind,
+	settings: ButtonSettings,
+	snapshot: AudioSnapshot | undefined
+): Promise<void> {
 	let changed = false;
-	for (const key of ["primary", "secondary"] as const) {
-		const dirSnap = slotSnapshot(snapshot, settings, key);
+	for (const key of DEVICE_SLOTS) {
+		const dirSnap = slotSnapshot(snapshot, settings, kind, key);
 		const device = settings[key];
 		if (dirSnap && device?.id && !device.displayName) {
 			const found = dirSnap.devices[device.id];
@@ -109,17 +131,21 @@ export function updateState(
 		return;
 	}
 
-	if (settings.direction === "both") {
+	if (settings.direction === "both" && kind === "set") {
 		// On only while its output and its input are both active; one left unset doesn't count against it.
-		const devices = bothDevices(settings, snapshot);
-		const on = devices.length > 0 && devices.every(({ deviceId, dirSnap }) => isActiveForRole(dirSnap, settings.role, deviceId));
+		const on = allActive(bothDevices(settings, kind, SET_BOTH_SLOTS, snapshot), settings.role);
 		action.setState(on ? 0 : 1).catch((error) => streamDeck.logger.error("Failed to set state", error));
 		return;
 	}
 
-	const dirSnap = slotSnapshot(snapshot, settings, "primary");
-	const primaryId = resolveDeviceId(settings, "primary", snapshot);
-	const secondaryId = resolveDeviceId(settings, "secondary", snapshot);
+	if (settings.direction === "both") {
+		updatePairsState(action, settings, snapshot, fromPoll);
+		return;
+	}
+
+	const dirSnap = slotSnapshot(snapshot, settings, kind, "primary");
+	const primaryId = resolveDeviceId(settings, kind, "primary", snapshot);
+	const secondaryId = resolveDeviceId(settings, kind, "secondary", snapshot);
 
 	let activeDevice: string;
 	if (settings.role === "all") {
@@ -133,9 +159,7 @@ export function updateState(
 		activeDevice = defaultIdForRole(dirSnap, settings.role);
 	}
 
-	const resolved = `${activeDevice}|${primaryId}|${secondaryId}`;
-	const unchanged = lastResolved.get(action.id) === resolved;
-	lastResolved.set(action.id, resolved);
+	const unchanged = resolvedUnchanged(action.id, `${activeDevice}|${primaryId}|${secondaryId}`);
 
 	if (kind === "set") {
 		action.setState(activeDevice === primaryId ? 0 : 1).catch((error) => streamDeck.logger.error("Failed to set state", error));
@@ -147,6 +171,36 @@ export function updateState(
 		return;
 	}
 	if (activeDevice === secondaryId) {
+		action.setState(1).catch((error) => streamDeck.logger.error("Failed to set state", error));
+		return;
+	}
+	if (fromPoll && unchanged) return;
+	action.showAlert().catch((error) => streamDeck.logger.error("Failed to show alert", error));
+}
+
+/** Records what an action's state was last resolved from; true if it's the same as the time before. */
+function resolvedUnchanged(actionId: string, resolved: string): boolean {
+	const unchanged = lastResolved.get(actionId) === resolved;
+	lastResolved.set(actionId, resolved);
+	return unchanged;
+}
+
+/**
+ * Toggle's "both": shows whichever of its two pairs is active - every device the pair has set is - and, as for a
+ * single device, alerts when neither is.
+ */
+function updatePairsState(action: KeyAction<ButtonSettings>, settings: ButtonSettings, snapshot: AudioSnapshot | undefined, fromPoll: boolean): void {
+	const primary = bothDevices(settings, "toggle", TOGGLE_PAIR_SLOTS.primary, snapshot);
+	const secondary = bothDevices(settings, "toggle", TOGGLE_PAIR_SLOTS.secondary, snapshot);
+	const roleIds = (dirSnap: DirectionSnapshot | undefined) => `${dirSnap?.defaultDeviceId}|${dirSnap?.communicationsDeviceId}`;
+	const ids = (devices: BothDevice[]) => devices.map(({ deviceId }) => deviceId).join(",");
+	const unchanged = resolvedUnchanged(action.id, `${roleIds(snapshot?.output)}|${roleIds(snapshot?.input)}|${ids(primary)}|${ids(secondary)}`);
+
+	if (allActive(primary, settings.role)) {
+		action.setState(0).catch((error) => streamDeck.logger.error("Failed to set state", error));
+		return;
+	}
+	if (allActive(secondary, settings.role)) {
 		action.setState(1).catch((error) => streamDeck.logger.error("Failed to set state", error));
 		return;
 	}
@@ -179,14 +233,16 @@ export async function performKeyPress(action: KeyAction<ButtonSettings>, kind: A
  */
 async function switchDevice(action: KeyAction<ButtonSettings>, kind: ActionKind, settings: ButtonSettings, state: number | undefined): Promise<void> {
 	if (settings.direction === "both") {
-		await switchBothDevices(action, settings, state);
+		// Set's own output and input, or the Toggle pair it isn't showing (picked as for a single device, below).
+		const slots = kind === "set" ? SET_BOTH_SLOTS : TOGGLE_PAIR_SLOTS[state !== 0 ? "primary" : "secondary"];
+		await switchBothDevices(action, kind, settings, slots, state);
 		return;
 	}
 
 	const snapshot = audioDeviceService.getSnapshot();
-	const dirSnap = slotSnapshot(snapshot, settings, "primary");
+	const dirSnap = slotSnapshot(snapshot, settings, kind, "primary");
 
-	const deviceId = resolveDeviceId(settings, state !== 0 || kind === "set" ? "primary" : "secondary", snapshot);
+	const deviceId = resolveDeviceId(settings, kind, state !== 0 || kind === "set" ? "primary" : "secondary", snapshot);
 	if (!deviceId) {
 		await action.showAlert().catch(() => undefined);
 		return;
@@ -215,11 +271,18 @@ async function switchDevice(action: KeyAction<ButtonSettings>, kind: ActionKind,
 }
 
 /**
- * Set's "both": sets its output and its input device together. One that's unplugged is skipped with an alert
- * rather than holding back the other, and the demo counts the press as one switch.
+ * "both": sets an output and an input device together - Set's own two, or the Toggle pair it's flipping to. One
+ * that's unplugged is skipped with an alert rather than holding back the other, and the demo counts the press as
+ * one switch. A Toggle key's state is left to performKeyPress to re-resolve.
  */
-async function switchBothDevices(action: KeyAction<ButtonSettings>, settings: ButtonSettings, state: number | undefined): Promise<void> {
-	const devices = bothDevices(settings, audioDeviceService.getSnapshot());
+async function switchBothDevices(
+	action: KeyAction<ButtonSettings>,
+	kind: ActionKind,
+	settings: ButtonSettings,
+	slots: readonly DeviceSlot[],
+	state: number | undefined
+): Promise<void> {
+	const devices = bothDevices(settings, kind, slots, audioDeviceService.getSnapshot());
 	if (devices.length === 0) {
 		await action.showAlert().catch(() => undefined);
 		return;
@@ -231,9 +294,9 @@ async function switchBothDevices(action: KeyAction<ButtonSettings>, settings: Bu
 
 	if (toSet.length === 0) {
 		if (missing) {
-			await action.setState(1).catch(() => undefined);
+			if (kind === "set") await action.setState(1).catch(() => undefined);
 			await action.showAlert().catch(() => undefined);
-		} else if (state !== undefined) {
+		} else if (kind === "set" && state !== undefined) {
 			await action.setState(state).catch(() => undefined);
 		}
 		return;

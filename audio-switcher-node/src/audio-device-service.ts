@@ -102,7 +102,7 @@ class AudioDeviceService {
 	}
 
 	/**
-	 * Sets each device (one per direction - Set's "both" passes an output and an input) as the default for each
+	 * Sets each device (one per direction - "both" passes an output and an input) as the default for each
 	 * role, then refreshes once so buttons reflect it right away. Refreshing only after the last one means no
 	 * button sees a half-switched snapshot (e.g. the new default device but the old communications one), which
 	 * would flip "All" buttons back and forth mid-switch.

@@ -24,13 +24,17 @@ enum class ButtonRole {
 
 struct ButtonSettings {
   AudioDeviceDirection direction = AudioDeviceDirection::INPUT;
-  // The "Set" action's direction "both" (which `direction` can't hold): it
-  // sets an output device (primaryDevice) and an input device
-  // (secondaryDevice) together.
+  // Direction "both" (which `direction` can't hold) switches an output and an
+  // input device together. The "Set" action sets an output (primaryDevice)
+  // and an input (secondaryDevice); the "Toggle" action flips between two
+  // pairs, each of its outputs (primaryDevice, secondaryDevice) with an input
+  // (primaryInputDevice, secondaryInputDevice).
   bool bothDirections = false;
   ButtonRole role = ButtonRole::ALL;
   AudioDeviceInfo primaryDevice;
   AudioDeviceInfo secondaryDevice;
+  AudioDeviceInfo primaryInputDevice;
+  AudioDeviceInfo secondaryInputDevice;
   DeviceMatchStrategy matchStrategy = DeviceMatchStrategy::Fuzzy;
   // Lowercase ID of a bright/dark icon pair in AudioDevicesIcons/, or
   // empty to use the plugin's built-in default icon. Used by the "Set"
@@ -52,6 +56,8 @@ struct ButtonSettings {
   // Changes if there's a fuzzy match
   std::string VolatilePrimaryID() const;
   std::string VolatileSecondaryID() const;
+  std::string VolatilePrimaryInputID() const;
+  std::string VolatileSecondaryInputID() const;
 };
 
 void from_json(const nlohmann::json&, ButtonSettings&);

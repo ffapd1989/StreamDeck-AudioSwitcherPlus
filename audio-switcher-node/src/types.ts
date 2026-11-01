@@ -29,7 +29,11 @@ export type DeviceMatchStrategy = "ID" | "Fuzzy";
 
 export type ButtonRole = "default" | "communication" | "all";
 
-/** "both" is the Set action's only: it sets an output device (`primary`) and an input device (`secondary`) together. */
+/**
+ * "both" switches an output and an input device together. Set's sets an output (`primary`) and an input
+ * (`secondary`); Toggle's flips between two pairs, each of its outputs (`primary`, `secondary`) with an input
+ * (`primaryInput`, `secondaryInput`).
+ */
 export type ButtonDirection = AudioDeviceDirection | "both";
 
 /** Mirrors ButtonSettings.h/.cpp - the persisted settings shape shared by both actions. */
@@ -40,6 +44,11 @@ export type ButtonSettings = {
 	primaryLabel?: string;
 	secondary?: AudioDeviceInfo;
 	secondaryLabel?: string;
+	// "Toggle" action set to "both" only: the input that switches along with each output.
+	primaryInput?: AudioDeviceInfo;
+	primaryInputLabel?: string;
+	secondaryInput?: AudioDeviceInfo;
+	secondaryInputLabel?: string;
 	matchStrategy: DeviceMatchStrategy;
 	hideUnavailable?: boolean;
 	hideDeviceType?: boolean;

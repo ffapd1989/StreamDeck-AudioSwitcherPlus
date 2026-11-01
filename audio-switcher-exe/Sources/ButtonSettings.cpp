@@ -47,6 +47,24 @@ void to_json(nlohmann::json& j, const ButtonRole& role) {
   }
 }
 
+namespace {
+// A device is saved with its full info, or - by older versions - as a bare ID.
+void ReadDevice(
+  const nlohmann::json& j,
+  const char* key,
+  AudioDeviceInfo& device) {
+  if (!j.contains(key)) {
+    return;
+  }
+  const auto& value = j.at(key);
+  if (value.is_string()) {
+    device.id = value;
+  } else if (value.is_object()) {
+    device = value;
+  }
+}
+}// namespace
+
 void from_json(const nlohmann::json& j, ButtonSettings& bs) {
   if (!j.contains("direction")) {
     return;
@@ -63,23 +81,10 @@ void from_json(const nlohmann::json& j, ButtonSettings& bs) {
     bs.role = j.at("role");
   }
 
-  if (j.contains("primary")) {
-    const auto& primary = j.at("primary");
-    if (primary.is_string()) {
-      bs.primaryDevice.id = primary;
-    } else {
-      bs.primaryDevice = primary;
-    }
-  }
-
-  if (j.contains("secondary")) {
-    const auto& secondary = j.at("secondary");
-    if (secondary.is_string()) {
-      bs.secondaryDevice.id = secondary;
-    } else {
-      bs.secondaryDevice = secondary;
-    }
-  }
+  ReadDevice(j, "primary", bs.primaryDevice);
+  ReadDevice(j, "secondary", bs.secondaryDevice);
+  ReadDevice(j, "primaryInput", bs.primaryInputDevice);
+  ReadDevice(j, "secondaryInput", bs.secondaryInputDevice);
 
   if (j.contains("matchStrategy")) {
     bs.matchStrategy = j.at("matchStrategy");
@@ -121,6 +126,8 @@ void to_json(nlohmann::json& j, const ButtonSettings& bs) {
     {"role", bs.role},
     {"primary", bs.primaryDevice},
     {"secondary", bs.secondaryDevice},
+    {"primaryInput", bs.primaryInputDevice},
+    {"secondaryInput", bs.secondaryInputDevice},
     {"matchStrategy", bs.matchStrategy},
     {"icon", bs.icon},
     {"primaryIcon", bs.primaryIcon},
@@ -202,4 +209,12 @@ std::string ButtonSettings::VolatilePrimaryID() const {
 
 std::string ButtonSettings::VolatileSecondaryID() const {
   return GetVolatileID(secondaryDevice, matchStrategy);
+}
+
+std::string ButtonSettings::VolatilePrimaryInputID() const {
+  return GetVolatileID(primaryInputDevice, matchStrategy);
+}
+
+std::string ButtonSettings::VolatileSecondaryInputID() const {
+  return GetVolatileID(secondaryInputDevice, matchStrategy);
 }

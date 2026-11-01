@@ -39,7 +39,7 @@ export class SetDeviceAction extends SingletonAction<ButtonSettings> {
 
 		applyIcons(action, "set", settings);
 		updateState(action, "set", settings, audioDeviceService.getSnapshot());
-		await backfillDeviceInfo(action, settings, audioDeviceService.getSnapshot());
+		await backfillDeviceInfo(action, "set", settings, audioDeviceService.getSnapshot());
 	}
 
 	override onWillDisappear(ev: WillDisappearEvent<ButtonSettings>): void {

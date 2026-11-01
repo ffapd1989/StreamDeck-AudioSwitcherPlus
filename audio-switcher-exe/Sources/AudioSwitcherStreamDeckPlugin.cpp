@@ -105,18 +105,46 @@ void SetDefaultForRole(
     direction, AudioDeviceRoleFromButtonRole(role), deviceID);
 }
 
-// The "Set" action's "both": its configured devices, the output then the
-// input, each with its direction.
-std::vector<std::pair<AudioDeviceDirection, std::string>> BothDevices(
-  const ButtonSettings& settings) {
-  std::vector<std::pair<AudioDeviceDirection, std::string>> devices;
-  if (auto id = settings.VolatilePrimaryID(); !id.empty()) {
-    devices.emplace_back(AudioDeviceDirection::OUTPUT, std::move(id));
+// Devices that direction "both" switches together, each with its direction.
+using DeviceList = std::vector<std::pair<AudioDeviceDirection, std::string>>;
+
+// The configured ones of an output and an input, in that order.
+DeviceList OutputAndInput(std::string outputID, std::string inputID) {
+  DeviceList devices;
+  if (!outputID.empty()) {
+    devices.emplace_back(AudioDeviceDirection::OUTPUT, std::move(outputID));
   }
-  if (auto id = settings.VolatileSecondaryID(); !id.empty()) {
-    devices.emplace_back(AudioDeviceDirection::INPUT, std::move(id));
+  if (!inputID.empty()) {
+    devices.emplace_back(AudioDeviceDirection::INPUT, std::move(inputID));
   }
   return devices;
+}
+
+// The "Set" action's "both": its output and its input.
+DeviceList BothDevices(const ButtonSettings& settings) {
+  return OutputAndInput(
+    settings.VolatilePrimaryID(), settings.VolatileSecondaryID());
+}
+
+// The "Toggle" action's "both": one of its two pairs - its primary or its
+// secondary output, with the input that goes with it.
+DeviceList TogglePairDevices(
+  const ButtonSettings& settings,
+  const bool primary) {
+  return primary
+    ? OutputAndInput(
+        settings.VolatilePrimaryID(), settings.VolatilePrimaryInputID())
+    : OutputAndInput(
+        settings.VolatileSecondaryID(), settings.VolatileSecondaryInputID());
+}
+
+// Whether every one of `devices` is active; a device left unset doesn't count
+// against it, but none set at all isn't.
+bool AllActive(const DeviceList& devices, const ButtonRole role) {
+  return !devices.empty()
+    && std::ranges::all_of(devices, [role](const auto& device) {
+         return IsActiveForRole(device.first, role, device.second);
+       });
 }
 
 constexpr std::string_view SET_ACTION_ID{
@@ -353,11 +381,18 @@ void AudioSwitcherStreamDeckPlugin::KeyUpForAction(
   const auto state = EPLJSONUtils::GetIntByName(inPayload, "state");
 
   if (settings.bothDirections) {
-    // Sets the output and the input device together. One that's unplugged
-    // is skipped with an alert rather than holding back the other.
-    const auto devices = BothDevices(settings);
+    // Sets an output and an input device together: the "Set" action's own,
+    // or the "Toggle" action's pair it isn't showing (picked as for a single
+    // device, below). One that's unplugged is skipped with an alert rather
+    // than holding back the other.
+    const auto isSet = inAction == SET_ACTION_ID;
+    const auto devices = isSet ? BothDevices(settings)
+                               : TogglePairDevices(settings, state != 0);
     if (devices.empty()) {
       ESDDebug("Doing nothing, no device ID");
+      if (!isSet) {
+        UpdateState(inContext);
+      }
       return;
     }
     bool missing = false;
@@ -373,6 +408,18 @@ void AudioSwitcherStreamDeckPlugin::KeyUpForAction(
       ESDDebug("Setting device to {}", deviceID);
       SetDefaultForRole(direction, settings.role, deviceID);
       changed = true;
+    }
+    if (!isSet) {
+      // Stream Deck flipped the key on press; a press that changed nothing
+      // puts it back to what's active (a change does that itself, through
+      // OnDefaultDeviceChanged).
+      if (!changed) {
+        UpdateState(inContext);
+      }
+      if (missing) {
+        mConnectionManager->ShowAlertForContext(inContext);
+      }
+      return;
     }
     if (missing) {
       mConnectionManager->SetState(1, inContext);
@@ -443,9 +490,15 @@ void AudioSwitcherStreamDeckPlugin::FillButtonDeviceInfo(
   auto& button = mButtons.at(context);
   auto& settings = button.settings;
 
+  // Every one is filled in (no short-circuiting), then saved once.
   const auto filledPrimary = FillAudioDeviceInfo(settings.primaryDevice);
   const auto filledSecondary = FillAudioDeviceInfo(settings.secondaryDevice);
-  if (filledPrimary || filledSecondary) {
+  const auto filledPrimaryInput
+    = FillAudioDeviceInfo(settings.primaryInputDevice);
+  const auto filledSecondaryInput
+    = FillAudioDeviceInfo(settings.secondaryInputDevice);
+  if (filledPrimary || filledSecondary || filledPrimaryInput
+      || filledSecondaryInput) {
     // Merge over the original payload so keys ButtonSettings doesn't model survive the write-back.
     auto merged = button.rawSettings.is_object() ? button.rawSettings : json::object();
     merged.update(json(settings));
@@ -600,15 +653,27 @@ void AudioSwitcherStreamDeckPlugin::UpdateState(
   const auto& action = it->second.action;
   const auto& settings = it->second.settings;
 
-  if (settings.bothDirections) {
+  if (settings.bothDirections && action == SET_ACTION_ID) {
     // On only while its output and its input are both active; one left
     // unset doesn't count against it.
-    const auto devices = BothDevices(settings);
-    const auto on = !devices.empty()
-      && std::ranges::all_of(devices, [&settings](const auto& device) {
-           return IsActiveForRole(device.first, settings.role, device.second);
-         });
+    const auto on = AllActive(BothDevices(settings), settings.role);
     mConnectionManager->SetState(on ? 0 : 1, context);
+    return;
+  }
+
+  if (settings.bothDirections) {
+    // The "Toggle" action shows whichever of its pairs is active - every
+    // device the pair has set is - and, as for a single device, alerts when
+    // neither is.
+    if (AllActive(TogglePairDevices(settings, true), settings.role)) {
+      mConnectionManager->SetState(0, context);
+      return;
+    }
+    if (AllActive(TogglePairDevices(settings, false), settings.role)) {
+      mConnectionManager->SetState(1, context);
+      return;
+    }
+    mConnectionManager->ShowAlertForContext(context);
     return;
   }
 
