@@ -84,6 +84,8 @@ class AudioSwitcherStreamDeckPlugin : public ESDBasePlugin {
   // Cached once at startup - StreamDeckSDK's GetPluginDirectoryPath() only
   // returns a valid path on its first call.
   std::string mIconsDirectory;
+  // The Sound control panel and Settings keys' images, from the same place.
+  std::string mSettingsIconsDirectory;
 
   void OnDefaultDeviceChanged(
     AudioDeviceDirection direction,
@@ -92,4 +94,6 @@ class AudioSwitcherStreamDeckPlugin : public ESDBasePlugin {
   void UpdateState(const std::string& context, const std::string& device = "");
   void FillButtonDeviceInfo(const std::string& context);
   void ApplyIcon(const std::string& context);
+  std::string SoundKeyImageFor(bool withGear);
+  void ApplySoundKeyIcon(const std::string& action, const std::string& context);
 };

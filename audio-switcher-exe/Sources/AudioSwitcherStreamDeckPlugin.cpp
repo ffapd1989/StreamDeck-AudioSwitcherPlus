@@ -36,17 +36,22 @@ LICENSE file.
 #include <atomic>
 #include <cctype>
 #include <cstdlib>
+#include <format>
 #include <fstream>
 #include <functional>
 #include <iterator>
 #include <mutex>
 #include <optional>
 #include <set>
+#include <thread>
 #include <vector>
 
 #ifdef _MSC_VER
 #include <objbase.h>
 #endif
+#include <Windows.h>
+#include <ShlObj.h>
+#include <shellapi.h>
 
 #include "audio_json.h"
 
@@ -151,6 +156,66 @@ constexpr std::string_view SET_ACTION_ID{
   "com.morganscruggs.audioswitcherplus.set"};
 constexpr std::string_view TOGGLE_ACTION_ID{
   "com.morganscruggs.audioswitcherplus.toggle"};
+// Keys that only open Windows' sound settings: the classic Sound control panel
+// (mmsys.cpl), and Sound in the Settings app.
+constexpr std::string_view SOUND_CONTROL_PANEL_ACTION_ID{
+  "com.morganscruggs.audioswitcherplus.soundcontrolpanel"};
+constexpr std::string_view SOUND_SETTINGS_ACTION_ID{
+  "com.morganscruggs.audioswitcherplus.soundsettings"};
+
+// Windows' System32 folder; empty if it can't be found.
+std::wstring SystemDirectory() {
+  wchar_t path[MAX_PATH];
+  const auto length = GetSystemDirectoryW(path, MAX_PATH);
+  if (length == 0 || length >= MAX_PATH) {
+    return {};
+  }
+  return std::wstring(path, length);
+}
+
+// Opens `file` - a program (given `parameters`) or a URI - as Explorer would,
+// on a thread of its own: the shell wants a single-threaded COM apartment, and
+// the plugin's event loop shouldn't wait while Windows starts it. `onFailure`
+// runs on that thread if it couldn't be opened.
+void ShellOpen(
+  std::wstring file,
+  std::wstring parameters,
+  std::function<void()> onFailure) {
+  std::thread([file = std::move(file),
+               parameters = std::move(parameters),
+               onFailure = std::move(onFailure)] {
+    const auto com = CoInitializeEx(
+      nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    // Started in the system folder rather than the plugin's own: a window
+    // working in the plugin's folder keeps it from being updated or removed
+    // while it's open.
+    const auto directory = SystemDirectory();
+    const auto result = ShellExecuteW(
+      nullptr,
+      L"open",
+      file.c_str(),
+      parameters.empty() ? nullptr : parameters.c_str(),
+      directory.empty() ? nullptr : directory.c_str(),
+      SW_SHOWNORMAL);
+    if (SUCCEEDED(com)) {
+      CoUninitialize();
+    }
+    // Only an HINSTANCE for compatibility: above 32 means it worked.
+    if (reinterpret_cast<INT_PTR>(result) <= 32) {
+      onFailure();
+    }
+  }).detach();
+}
+
+// Opens the classic Sound control panel, or (`settings`) Sound in the Settings
+// app - for the keys that open them.
+void OpenSoundWindow(const bool settings, std::function<void()> onFailure) {
+  if (settings) {
+    ShellOpen(L"ms-settings:sound", {}, std::move(onFailure));
+  } else {
+    ShellOpen(L"control.exe", L"mmsys.cpl", std::move(onFailure));
+  }
+}
 
 std::string ToLower(std::string s) {
   std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
@@ -304,6 +369,96 @@ std::string RecolorPngAsBase64(
     reinterpret_cast<const unsigned char*>(pngOut.data()), pngOut.size());
 }
 
+// The Sound control panel and Settings keys show the Sound control panel's
+// own icon, at the size the other icons look on a key.
+constexpr int KEY_IMAGE_SIZE = 144;
+constexpr int SOUND_ICON_SIZE = 96;
+
+// The Sound control panel's icon (resource 100 in mmsys.cpl) as a base64 PNG
+// `size` pixels square; empty if Windows doesn't have it. It's Microsoft's
+// artwork, so it's read from Windows rather than shipped with the plugin.
+std::string SoundControlPanelIconBase64(const int size) {
+  const auto systemDirectory = SystemDirectory();
+  if (systemDirectory.empty()) {
+    return {};
+  }
+  const auto file = systemDirectory + L"\\mmsys.cpl";
+  HICON icon = nullptr;
+  if (
+    SHDefExtractIconW(
+      file.c_str(), -100, 0, &icon, nullptr, static_cast<UINT>(size))
+      != S_OK
+    || !icon) {
+    return {};
+  }
+  ICONINFO info {};
+  const auto gotInfo = GetIconInfo(icon, &info);
+  DestroyIcon(icon);
+  if (!gotInfo) {
+    return {};
+  }
+
+  // Its color bitmap, as top-down 32-bit BGRA with the icon's alpha.
+  BITMAPINFO bitmapInfo {};
+  bitmapInfo.bmiHeader.biSize = sizeof(bitmapInfo.bmiHeader);
+  bitmapInfo.bmiHeader.biWidth = size;
+  bitmapInfo.bmiHeader.biHeight = -size;
+  bitmapInfo.bmiHeader.biPlanes = 1;
+  bitmapInfo.bmiHeader.biBitCount = 32;
+  bitmapInfo.bmiHeader.biCompression = BI_RGB;
+  std::vector<unsigned char> pixels(static_cast<size_t>(size) * size * 4);
+  const auto dc = GetDC(nullptr);
+  const auto rows = info.hbmColor
+    ? GetDIBits(
+        dc,
+        info.hbmColor,
+        0,
+        size,
+        pixels.data(),
+        &bitmapInfo,
+        DIB_RGB_COLORS)
+    : 0;
+  ReleaseDC(nullptr, dc);
+  DeleteObject(info.hbmColor);
+  DeleteObject(info.hbmMask);
+  if (rows != size) {
+    return {};
+  }
+  for (size_t i = 0; i < pixels.size(); i += 4) {
+    std::swap(pixels[i], pixels[i + 2]);
+  }
+
+  std::string png;
+  stbi_write_png_to_func(
+    &PngWriteCallback, &png, size, size, 4, pixels.data(), size * 4);
+  return websocketpp::base64_encode(
+    reinterpret_cast<const unsigned char*>(png.data()), png.size());
+}
+
+// A key image of the Sound control panel's icon (a base64 PNG) at (offset,
+// offset), with the key-sized base64 PNG `overlay` over it unless that's
+// empty - as an SVG, which Stream Deck takes as it would a PNG.
+std::string SoundKeyImage(
+  const std::string& icon,
+  const int offset,
+  const std::string& overlay) {
+  auto svg = std::format(
+    R"(<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{0}" height="{0}" viewBox="0 0 {0} {0}">)"
+    R"(<image x="{1}" y="{1}" width="{2}" height="{2}" xlink:href="data:image/png;base64,{3}"/>)",
+    KEY_IMAGE_SIZE,
+    offset,
+    SOUND_ICON_SIZE,
+    icon);
+  if (!overlay.empty()) {
+    svg += std::format(
+      R"(<image width="{0}" height="{0}" xlink:href="data:image/png;base64,{1}"/>)",
+      KEY_IMAGE_SIZE,
+      overlay);
+  }
+  svg += "</svg>";
+  return "data:image/svg+xml;base64," + websocketpp::base64_encode(svg);
+}
+
 bool FillAudioDeviceInfo(AudioDeviceInfo& di) {
   if (di.id.empty()) {
     return false;
@@ -335,6 +490,7 @@ AudioSwitcherStreamDeckPlugin::AudioSwitcherStreamDeckPlugin() {
   const auto pluginDir = ESDUtilities::GetPluginDirectoryPath();
   if (!pluginDir.empty()) {
     mIconsDirectory = (pluginDir / "AudioDevicesIcons").string();
+    mSettingsIconsDirectory = (pluginDir / "SettingsIcons").string();
   }
 }
 
@@ -367,6 +523,16 @@ void AudioSwitcherStreamDeckPlugin::KeyUpForAction(
   const json& inPayload,
   const std::string& inDeviceID) {
   ESDDebug("{}: {}", __FUNCTION__, inPayload.dump());
+
+  if (
+    inAction == SOUND_CONTROL_PANEL_ACTION_ID
+    || inAction == SOUND_SETTINGS_ACTION_ID) {
+    OpenSoundWindow(inAction == SOUND_SETTINGS_ACTION_ID, [this, inContext] {
+      mConnectionManager->ShowAlertForContext(inContext);
+    });
+    return;
+  }
+
   std::scoped_lock lock(mButtonsMutex);
 
   if (!inPayload.contains("settings")) {
@@ -470,6 +636,14 @@ void AudioSwitcherStreamDeckPlugin::WillAppearForAction(
   const std::string& inContext,
   const json& inPayload,
   const std::string& inDeviceID) {
+  // Only device keys have a state to keep up to date; the Sound control panel
+  // and Settings keys just draw their icon, and open their window when pressed.
+  if (
+    inAction == SOUND_CONTROL_PANEL_ACTION_ID
+    || inAction == SOUND_SETTINGS_ACTION_ID) {
+    ApplySoundKeyIcon(inAction, inContext);
+    return;
+  }
   std::scoped_lock lock(mButtonsMutex);
   auto& button = mButtons[inContext];
   button = {inAction, inContext};
@@ -595,6 +769,35 @@ void AudioSwitcherStreamDeckPlugin::ApplyIcon(const std::string& context) {
       context,
       1);
   }
+}
+
+std::string AudioSwitcherStreamDeckPlugin::SoundKeyImageFor(
+  const bool withGear) {
+  // Read once - Windows' icon doesn't change while the plugin runs.
+  static const auto icon = SoundControlPanelIconBase64(SOUND_ICON_SIZE);
+  if (icon.empty()) {
+    return {};
+  }
+  if (!withGear) {
+    return SoundKeyImage(icon, (KEY_IMAGE_SIZE - SOUND_ICON_SIZE) / 2, {});
+  }
+  // The same speaker, moved up and left for the gear.
+  const auto gear = ReadFileAsBase64(
+    ESD::filesystem::path(mSettingsIconsDirectory)
+    / "sound-settings-badge.png");
+  return SoundKeyImage(icon, 14, gear);
+}
+
+void AudioSwitcherStreamDeckPlugin::ApplySoundKeyIcon(
+  const std::string& action,
+  const std::string& context) {
+  // Without Windows' icon, the key keeps the manifest's own image.
+  const auto image = SoundKeyImageFor(action == SOUND_SETTINGS_ACTION_ID);
+  if (image.empty()) {
+    return;
+  }
+  mConnectionManager->SetImage(
+    image, context, kESDSDKTarget_HardwareAndSoftware, 0);
 }
 
 void AudioSwitcherStreamDeckPlugin::WillDisappearForAction(

@@ -37,6 +37,36 @@
 					"Image": "AudioDevicesIcons/headphones"
 				}
 			]
+		},
+		{
+			"Name": "Sound Control Panel",
+			"UUID": "com.morgan-scruggs.audioswitcherplus-node.soundcontrolpanel",
+			"Icon": "SettingsIcons/sound-control-panel",
+			"Tooltip": "Open the classic Sound control panel (mmsys.cpl).",
+			"Controllers": [
+				"Keypad"
+			],
+			"SupportedInMultiActions": true,
+			"States": [
+				{
+					"Image": "SettingsIcons/sound-control-panel"
+				}
+			]
+		},
+		{
+			"Name": "Sound Settings",
+			"UUID": "com.morgan-scruggs.audioswitcherplus-node.soundsettings",
+			"Icon": "SettingsIcons/sound-settings",
+			"Tooltip": "Open Sound in Windows Settings.",
+			"Controllers": [
+				"Keypad"
+			],
+			"SupportedInMultiActions": true,
+			"States": [
+				{
+					"Image": "SettingsIcons/sound-settings"
+				}
+			]
 		}
 	],
 	"Author": "Morgan Scruggs",

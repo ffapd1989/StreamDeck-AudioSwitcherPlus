@@ -17,6 +17,7 @@ install(
   DIRECTORY
   ../../shared/propertyinspector
   ../../shared/AudioDevicesIcons
+  ../../shared/SettingsIcons
   DESTINATION
   ${CMAKE_INSTALL_PREFIX}
 )

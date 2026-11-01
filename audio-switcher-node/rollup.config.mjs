@@ -90,7 +90,7 @@ export default function config(commandLineArgs) {
 				// own folder.
 				name: "copy-shared-assets",
 				buildStart() {
-					for (const folder of ["AudioDevicesIcons", "propertyinspector"]) {
+					for (const folder of ["AudioDevicesIcons", "SettingsIcons", "propertyinspector"]) {
 						const src = path.join("..", "shared", folder);
 						const dest = path.join(sdPlugin, folder);
 						fs.mkdirSync(dest, { recursive: true });
