@@ -437,6 +437,20 @@
       return (typeof device == 'object' && device) ? device.direction : undefined;
     }
 
+    function liveDeviceId(slot) {
+      const device = settings[slot];
+      if (typeof device != 'object' || !device) return device;
+      const direction = slotDirection(slot);
+      const devices = devicesFor(direction);
+      if (document.getElementById('exactMatch').checked || (device.direction && device.direction !== direction)
+        || devices[device.id]?.state === 'connected') return device.id;
+      const sameInterface = Object.values(devices).filter(other => other.state === 'connected'
+        && stripNumberPrefix(other.interfaceName) === stripNumberPrefix(device.interfaceName));
+      const sameEndpoint = sameInterface.find(other => other.endpointName === device.endpointName);
+      if (sameEndpoint) return sameEndpoint.id;
+      return sameInterface.length === 1 ? sameInterface[0].id : device.id;
+    }
+
     function updateDeviceLists() {
       deviceSlots().forEach(fillDeviceList);
     }
@@ -445,7 +459,7 @@
       const selector = document.getElementById(`${slot}Device`);
       const direction = slotDirection(slot);
       const devices = devicesFor(direction);
-      const selectedId = savedDeviceId(slot);
+      const selectedId = liveDeviceId(slot);
 
       const state_sort = {
         "connected": 0,
@@ -494,7 +508,7 @@
       // list, so each list offers both. A device saved while the other direction was selected must not be
       // carried over (it would show up as a duplicate with the label saved from that other direction).
       for (const other of deviceSlots()) {
-        const id = savedDeviceId(other);
+        const id = liveDeviceId(other);
         const savedDirection = savedDeviceDirection(other);
         if (!id || slotDirection(other) !== direction || (savedDirection && savedDirection !== direction)) continue;
         if (selector.querySelector(`option[value="${id}"]`)) continue;
@@ -707,11 +721,13 @@
     }
 
     function saveSettings() {
+      const savedDevices = deviceSlots().map(slot => settings[slot]);
       for (const slot of deviceSlots()) {
         const selector = document.getElementById(`${slot}Device`);
         const id = selector.value;
         // An empty ID means the list is empty.
-        settings[slot] = devicesFor(slotDirection(slot))[id];
+        settings[slot] = devicesFor(slotDirection(slot))[id]
+          || savedDevices.find(device => typeof device == 'object' && device && device.id === id);
         settings[`${slot}Label`] = id ? selector.querySelector(`option[value="${id}"]`)?.label : undefined;
         selector.title = settings[`${slot}Label`] || '';
         renderDeviceInfo(`${slot}DeviceInfo`, settings[slot], settings[`${slot}Label`]);
