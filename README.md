@@ -54,8 +54,6 @@ This uses undocumented and unsupported Windows APIs (the same ones, either way).
 
 This fork does not support macOS - the upstream project did, but maintaining and testing a Mac build isn't something this fork can commit to. If you're on a Mac, use [the original StreamDeck-AudioOutputSwitcher](https://github.com/fredemmott/StreamDeck-AudioOutputSwitcher) instead.
 
-[`discord-fix/`](discord-fix/) is not part of this plugin: it patches Elgato's Discord plugin, whose "Set Audio Device" key shows a device twice after Windows re-creates it.
-
 ## Getting Help
 
 Check the relevant troubleshooting guide first ([exe](audio-switcher-exe/TROUBLESHOOTING.md) / [node](audio-switcher-node/TROUBLESHOOTING.md)). If that doesn't help, you can reach me through GitHub by [opening an issue](https://github.com/morganscruggs/StreamDeck-AudioSwitcher/issues) - but I make this mainly for my own use, and share it in the hope that others find it useful, so I may be slow to respond.

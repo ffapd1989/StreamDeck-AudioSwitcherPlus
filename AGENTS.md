@@ -11,10 +11,6 @@ Shared between both are in [`shared/`](shared/): the button icons, the property 
 
 **Unless the user says otherwise, apply every change to both versions** - features, bug fixes, and UI/property-inspector changes alike - adapting to each one's language and structure rather than copying code verbatim. If a change genuinely only applies to one (e.g. a PowerShell-bridge issue in the node version, or a CMake/build issue in the exe version), say so rather than silently skipping the other. When reporting back, state which version(s) were changed.
 
-## discord-fix/ is not this plugin
-
-[`discord-fix/`](discord-fix/) patches Elgato's installed Discord plugin (see its README). The both-versions rule doesn't apply to it, and its tests run against the Discord plugin installed on this machine, so they stay out of `build-all.ps1` and CI: run `npm test` in that folder when you change it.
-
 ## The demo is Node-only
 
 **The demo edition exists only for the Node version** - it's the one published on the Elgato Marketplace, since the exe can't be signed. Don't add a demo build to the exe, and don't treat demo work as needing exe parity: demo limits, demo-only property-inspector UI and the demo's Marketplace listing apply to the Node version alone (see "Demo version" in the README). The demo's limits live in `audio-switcher-node/src/edition.ts` and in the shared property inspector, which recognizes the demo by its `-node-demo` UUID - keep those two in step. The exe never runs the PI's demo code, so it needs no change for it. Everything else still follows the both-versions rule above.
